@@ -37,12 +37,7 @@ The Chirpstack Gateway Bridge (CGB) is the module of Chirpstack LoRaWAN stack th
 sudo apt install chirpstack-gateway-bridge
 ```
 
-**Configurations**
-
 The configurations for the gateway bridge will be located at `/etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge.toml`
-
-By default the gateway bridge will listen to port 1700 and will encode it with json and sent it to port localhost:1883 (MQTT default).
-
 
 
 **Logs**
@@ -53,4 +48,3 @@ journalctl -u chirpstack-gateway-bridge -f -n 50
 
 
 <script src="./../_static/js/required.js"></script> 
-
