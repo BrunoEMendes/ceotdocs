@@ -18,6 +18,10 @@ Chirpstack Arquitecture - Image taken from [Chirpstack Website](https://www.chir
 </center>
 
 
+
+<!------------------------------------ Gateway Bridge ------------------------------------------------------>
+
+
 ## Gateway Bridge
 
 
@@ -25,32 +29,206 @@ The Chirpstack Gateway Bridge (CGB) is the module of Chirpstack LoRaWAN stack th
 
 
 
-### Instalation
 
-**Requirements**
+### Requirements
 
 - Any MQTT broker for instance [Mosquitto](https://mosquitto.org/download/)
 
-**Instalation**
+```bash
+sudo apt-get install mosquitto
+```
 
-```js
+If you wanna pub or sub to mqtt you will need to install a pub/sub package (optional: used for debugging).
+
+```bash
+sudo apt-get install mosquitto-clients
+```
+
+
+### Instalation
+
+```bash
 sudo apt install chirpstack-gateway-bridge
 ```
 
-**Configurations**
+### Configurations
 
 The configurations for the gateway bridge will be located at `/etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge.toml`
 
 By default the gateway bridge will listen to port 1700 and will encode it with json and sent it to port localhost:1883 (MQTT default).
 
+If you want to do add new message formats that arent `stats|uplinks|downlinks|execs|acks` you can add them in the configuration file. The topic format for up/downlinks is usually `gateway/[gateway_id]/event/[event_type]`. You can check more about the formats and events in [here](https://www.chirpstack.io/docs/chirpstack-gateway-bridge/payloads/events.html).
 
+You can also change the detail of the logs, it goes from 0 to 5, where 5 is the one with the most details and mostly used for debugging. This is achieved by after `[general]` write `[log_level=number]`.
 
-**Logs**
+### Logs and Debugging
 
-```
+```bash
 journalctl -u chirpstack-gateway-bridge -f -n 50
 ```
 
+To track if the gateway bridge is sending packets at mqtt you can use `$mosquitto_sub -h <ipaddress> -t <topic>`. By default the topic that you wanna use is `gateway/#/event/up` which will track all the uplinks sent from the gateway bridge to the network server. To check any kid of package you can just use `gateway/#`. For more information on debugging you can check [here](https://www.chirpstack.io/project/guides/connect-gateway/).
+
+
+If you wanna track if the gateway is sending packets towards your server, you can use `tcpdump`.
+
+
+If the ChirpStack Gateway Bridge is installed on the gateway itself, then the following command must be executed on the gateway itself:
+
+
+```bash
+sudo tcpdump -AUq -i lo port 1700
+```
+If the ChirpStack Gateway Bridge is installed on a server, then you must execute the following command (either on the gateway or on the receiving server):
+
+
+```bash
+sudo tcpdump -AUq port 1700
+```
+
+more details can be foun in [here](https://www.chirpstack.io/project/guides/connect-gateway/#tcpdump).
+
+
+<!------------------------------------ NETWORK SERVER ------------------------------------------------------>
+## Network Server
+
+Once the message has been published in the MQTT server, the Chirpstack Network Server (subscribing the topic) will read the message and confirm if it is a duplicate message. The duplication of LoRa frames can happen because a LoRa frame is broadcasted, allowing multiple gateways to read the frame for delivery to the CNS. In this case the CNS will keep the frame from the gateway that has the best connection with the device. The CNS also remembers gateway-device associations for downlink purposes. After dealing with frame duplication it will communicate with the Application Server through google Remote Procedure Call (gRPC).
+
+
+
+### Requirements
+
+- Any MQTT broker for instance [Mosquitto](https://mosquitto.org/download/)
+
+```bash
+sudo apt-get install mosquitto
+```
+
+If you wanna pub or sub to mqtt you will need to install a pub/sub package (optional: used for debugging).
+
+```bash
+sudo apt-get install mosquitto-clients
+```
+
+
+- Database: by default uses PSQL.
+
+```
+sudo apt install postgresql
+```
+
+In the SQL console:
+
+```SQL
+-- create role for authentication
+create role chirpstack with login password 'chirpstack';
+
+-- create database
+create database chirpstack with owner chirpstack;
+
+-- change to chirpstack database
+\c chirpstack
+
+-- create pg_trgm extension
+create extension pg_trgm;
+
+-- exit psql
+\q
+```
+
+- Redis
+
+```
+sudo apt install redis-server
+```
+
+### Instalation
+
+```bash
+sudo apt install chirpstack-gateway-bridge
+```
+
+### Configurations
+
+The configurations for the gateway bridge will be located at `/etc/chirpstack−network−server/chirpstack−network−server.toml`
+
+
+
+First thing it needs to be here is to set up your database in the line `dns=postgres://user:password@hostname/database?sslmode=disable`.
+
+
+In here you can configure the **delays** related information such as **deduplication_delay** which is the interval for how long the network server waits for duplication packets and **get_downlink_data_delay** which is how long the network server waits to send the downlink after receiving the uplink. 
+
+
+
+
+Can also easily add **ADR plugins** which are alternate versions to the default ADR.
+To do that just add the location of your built GO plugin example.
+
+```GO
+// Handle handles the ADR and returns the (new) parameters.
+func (h *Handler) Handle(req adr.HandleRequest) (adr.HandleResponse, error) {
+	resp := adr.HandleResponse{
+		DR:           req.DR,
+		TxPowerIndex: req.TxPowerIndex,
+		NbTrans:      req.NbTrans,
+	}
+
+// if ADR is disabled, return current values
+	if !req.ADR {
+	    return resp, nil
+	}
+    
+// gets info related to the last package received
+	up := req.UplinkHistory[len(req.UplinkHistory)-1]
+
+// calculates the nstep value using SNR
+	snrM := up.MaxSNR
+	snrMargin := snrM - req.RequiredSNRForDR - req.InstallationMargin
+	nStep := int(snrMargin / 3)
+
+    
+// gets the SF and BW value corresponding to the datarate received
+	sf, bw := get_sf_bw_val(req.DR)
+	tx := up.TXPowerIndex
+    
+// dummy data example
+// if TXPOWER index is 0 then increase to 2 just for demonstration
+	if up.TXPowerIndex > 1 {
+// get the values from the solution table generated with RL Agent
+		newsf, newtx := RLAGENT(sf, tx, nStep)
+		
+		log.Info("New SF: ", newsf, " NewTX: ", newtx)
+
+// calculates new datarate based on the new datarate and new bw
+		newdr := get_dr_val(newsf, bw)
+		
+// if new datarate is higher than the max dr of the device,
+// it sets the value of the datarate to max datarate
+		if newdr > req.MaxDR {
+			resp.DR = req.MaxDR
+		} else {
+			resp.DR = newdr
+		}
+		resp.TxPowerIndex = newtx
+	} else {
+		resp.TxPowerIndex = 2
+	}
+
+	// resp.DR = 3
+	return resp, nil
+}   
+```
+
+```bash
+go build projectdir
+```
+
+You can also change the detail of the logs, it goes from 0 to 5, where 5 is the one with the most details and mostly used for debugging. This is achieved by after `[general]` write `[log_level=number]`.
+
+More details about configuration of the network server can be found in [here](https://www.chirpstack.io/network-server/install/config/).
+
+### Logs and Debugging
 
 <script src="./../_static/js/required.js"></script> 
 

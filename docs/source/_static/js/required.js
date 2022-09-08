@@ -7,6 +7,30 @@ highlights.forEach(div => {
   copy.innerHTML = "Copy"
   // add the event listener to each click
   copy.addEventListener("click", handleCopyClick)
+
+
+
+  copy.addEventListener('click', function showtooltip(){
+        copy.innerHTML = 'Copied!'
+        copy.style.fontStyle = 'italic'
+
+        setTimeout(
+          function() {
+            copy.innerHTML = 'Copy'
+            copy.style.fontStyle = 'normal'
+          }, 5000);
+      
+
+  })
+
+
+
+  copy.addEventListener('mouseover', function handleMouseOver() {
+    copy.style.color = 'blue';
+  });
+  copy.addEventListener('mouseout', function handleMouseOut() {
+    copy.style.color = '#adb5bd';
+  });
   // append the copy button to each code block
   div.prepend(copy)
 })
@@ -24,7 +48,9 @@ const copyToClipboard = str => {
       : false // Mark as false to know no selection existed before
   el.select() // Select the <textarea> content
   document.execCommand("copy") // Copy - only works as a result of a user action (e.g. click events)
-  document.body.removeChild(el) // Remove the <textarea> element
+  // document.body.removeChild(el) // Remove the <textarea> element
+
+
   if (selected) {
     // If a selection existed before copying
     document.getSelection().removeAllRanges() // Unselect everything on the HTML document
