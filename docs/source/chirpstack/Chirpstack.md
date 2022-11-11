@@ -230,5 +230,111 @@ More details about configuration of the network server can be found in [here](ht
 
 ### Logs and Debugging
 
+```bash
+journalctl -u chirpstack-network-server -fn 50
+```
+
+This allows to check if the Network Server is communicating with the Application Server.
+
+
+
+## Application Server
+
+This is the last module of Chirpstack that is responsible for the join-requests and encrypts the payloads of the application. It also provides a web interface for users where they can control users where they can control the features mentioned in the Network Server and a few more. It also offers a restful API and allows sending post whenever it receives information from a device to a user application.
+
+
+
+
+### Requirements
+
+- Any MQTT broker for instance [Mosquitto](https://mosquitto.org/download/)
+
+```bash
+sudo apt-get install mosquitto
+```
+
+If you wanna pub or sub to mqtt you will need to install a pub/sub package (optional: used for debugging).
+
+```bash
+sudo apt-get install mosquitto-clients
+```
+
+
+- Database: by default uses PSQL.
+
+```
+sudo apt install postgresql
+```
+
+In the SQL console:
+
+```SQL
+sudo -u postgres psql
+
+-- create the chirpstack_ns user with password 'dbpassword'
+create role chirpstack_ns with login password 'dbpassword';
+
+-- create the chirpstack_ns database
+create database chirpstack_ns with owner chirpstack_ns;
+
+-- exit the prompt
+\q
+```
+
+- Redis
+
+```
+sudo apt install redis-server
+```
+
+### Instalation
+
+```bash
+sudo apt install chirpstack-application-server
+```
+
+### Configurations
+The settings in this section are more related to association with other applications like Influxdb, AWS, etc.
+The App Server provides an API port, which is set by default to port 8003, and the API provides information available on the Network Server, which was mentioned earlier, for example subscribing to the frames received by a certain device as long as it has permission to do so.
+    
+There are not many settings in this section. This is due to the fact that the Application Serv\er mostly works as a server with a web interface that allows you to easily manage the Network Server, allowing you to create gateways, devices, profiles and all other content mentioned in the Network Server.
+
+It also offers the possibility to integrate the Chirpstack with other applications, depending on your needs. To do so, different steps have to be followed depending on the application. It is in this process that you can integrate an application created by the user, and for that, you just have to select the ip:port of the app's server.
+
+### Debugging and Logging
+
+```
+journalctl -u chirpstack-application-server -fn 50
+```
+
+This allows to check if the Application Server is successfully sending and receiving packets. 
+
+
+## API
+
+The API allows to easily control chirpstack Network Server using your own Application and it is quite simple to use. Only requires the user to create a key in the application server. The key is a JWT Token that is originated by the key in the Application Server config file in conjuction with the user account information.
+
+More information in [here](https://www.chirpstack.io/application-server/api/).
+
+
+JWT Token: https://jwt.io/
+
+Http Examples: https://www.chirpstack.io/application-server/api/go-examples/
+
+Enqueue Downlink Example with curl:
+
+```bash
+curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Grpc-Metadata-Authorization: Bearer <API TOKEN>' -d '{ \ 
+   "deviceQueueItem": { \ 
+     "confirmed": false, \ 
+     "data": "AQID", \ 
+     "fPort": 10 \ 
+   } \ 
+ }' 'http://localhost:8080/api/devices/0101010101010101/queue'
+```
+
+
+
+
 <script src="./../_static/js/required.js"></script> 
 
